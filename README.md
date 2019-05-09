@@ -1,2 +1,2 @@
-# openML
-Go bindings for openML (Radeon)
+# miopen
+Go bindings for miopen (Radeon)
