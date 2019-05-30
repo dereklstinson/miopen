@@ -8,9 +8,11 @@ import "C"
 import "errors"
 
 //Status is the error return used in miopen
-type status C.miopenStatus_t
+//Since miopen is supposed to be like cudnn. I made this public so that I could copy and paste gocudnn functions easier.
+//
+type Status C.miopenStatus_t
 
-func (s status) error(comment string) error {
+func (s Status) error(comment string) error {
 	x := (C.miopenStatus_t)(s)
 	switch x {
 	case C.miopenStatusSuccess:
