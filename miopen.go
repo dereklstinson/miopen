@@ -5,10 +5,11 @@ package miopen
 
 */
 import "C"
+import "unsafe"
 
-//TensorD is a tensor descriptor
-type TensorD struct {
-	descriptor C.miopenTensorDescriptor_t
+//Pointer - For miopen a Pointer needs to have a function Ptr() Which points to memory used by amd. (usually on device)
+type Pointer interface {
+	Ptr() unsafe.Pointer
 }
 
 //FusionOpD - Fusion Operator Descriptor contains the meta-data associated with an operator
@@ -19,6 +20,7 @@ type FusionOpD struct {
 //ConvolutionD - Convolution descriptor is an object that allows the user to specify a layer's padding, stride,
 //and dilation of the convolutional filter. Parameters must all be non-negative.
 type ConvolutionD struct {
+	dims       C.int
 	descriptor C.miopenConvolutionDescriptor_t
 }
 
@@ -107,24 +109,6 @@ func (i *IndexType) Uint32() IndexType { *i = IndexType(C.miopenIndexUint32); re
 //Uint64 sets i to Uint64 and returns the changed value
 func (i *IndexType) Uint64() IndexType { *i = IndexType(C.miopenIndexUint64); return *i }
 
-//OpTensorOp is used for flags for the Optensor functions
-type OpTensorOp C.miopenTensorOp_t
-
-func (o OpTensorOp) c() C.miopenTensorOp_t      { return C.miopenTensorOp_t(o) }
-func (o *OpTensorOp) cptr() *C.miopenTensorOp_t { return (*C.miopenTensorOp_t)(o) }
-
-//Add sets o to OpTensorOp(C.miopenTensorOpAdd) and returns the new value
-func (o *OpTensorOp) Add() OpTensorOp { *o = OpTensorOp(C.miopenTensorOpAdd); return *o }
-
-//Mul sets o to OpTensorOp(C.miopenTensorOpMul) and returns the new value
-func (o *OpTensorOp) Mul() OpTensorOp { *o = OpTensorOp(C.miopenTensorOpMul); return *o }
-
-//Min sets o to OpTensorOp(C.miopenTensorOpMin)  and returns the new value
-func (o *OpTensorOp) Min() OpTensorOp { *o = OpTensorOp(C.miopenTensorOpMin); return *o }
-
-//Max sets o to OpTensorOp(C.miopenTensorOpMax) and returns the new value
-func (o *OpTensorOp) Max() OpTensorOp { *o = OpTensorOp(C.miopenTensorOpMax); return *o }
-
 //ConvolutionMode is the type to describe the convolution mode flags
 type ConvolutionMode C.miopenConvolutionMode_t
 
@@ -211,3 +195,109 @@ func (l *LRNMode) WithinChannel() LRNMode { *l = (LRNMode)(C.miopenLRNWithinChan
 //
 // Cross Channel
 func (l *LRNMode) CrossChannel() LRNMode { *l = (LRNMode)(C.miopenLRNCrossChannel); return *l }
+
+//BatchNormMode is used for flags. Flags are set through its methods
+//
+//Batch Normalization layer mode
+type BatchNormMode C.miopenBatchNormMode_t
+
+func (b BatchNormMode) c() C.miopenBatchNormMode_t      { return (C.miopenBatchNormMode_t)(b) }
+func (b *BatchNormMode) cptr() *C.miopenBatchNormMode_t { return (*C.miopenBatchNormMode_t)(b) }
+
+//PerActivation sets b and returns BatchNormMode(C.miopenBNPerActivation) flag
+//
+//Element-wise normalization for fully connected layer
+func (b *BatchNormMode) PerActivation() BatchNormMode {
+	*b = (BatchNormMode)(C.miopenBNPerActivation)
+	return *b
+}
+
+//Spatial sets b and returns BatchNormMode(C.miopenBNSpatial) flag
+//
+//Mini-batch spatial normalization for convolutional layers
+func (b *BatchNormMode) Spatial() BatchNormMode { *b = (BatchNormMode)(C.miopenBNSpatial); return *b }
+
+//ActivationMode is used for flags. Flags are set through its methods
+//
+//Activation layer modes
+type ActivationMode C.miopenActivationMode_t
+
+func (a ActivationMode) c() C.miopenBatchNormMode_t      { return (C.miopenBatchNormMode_t)(a) }
+func (a *ActivationMode) cptr() *C.miopenBatchNormMode_t { return (*C.miopenBatchNormMode_t)(a) }
+
+//PasThru sets a and returns ActivationMode(C.miopenActivationPASTHRU) flag
+//
+//No activation, pass through the data
+func (a *ActivationMode) PasThru() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationPASTHRU)
+	return *a
+}
+
+//Logistic sets a and returns ActivationMode(C.miopenActivationLOGISTIC) flag
+//
+// Sigmoid function: 1 / (1 + e^{-x})
+func (a *ActivationMode) Logistic() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationLOGISTIC)
+	return *a
+}
+
+//Tanh sets a and returns ActivationMode(C.miopenActivationTANH) flag
+//
+//Tanh activation: beta * tanh(alpha * x)
+func (a *ActivationMode) Tanh() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationTANH)
+	return *a
+}
+
+//Relu sets a and returns ActivationMode(C.miopenActivationRELU) flag
+//
+//Rectified Linear Unit:  max(0, x)
+func (a *ActivationMode) Relu() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationRELU)
+	return *a
+}
+
+//SoftRelu sets a and returns ActivationMode(C.miopenActivationSOFTRELU) flag
+//
+//SoftRelu activation: log(1 + e^x)
+func (a *ActivationMode) SoftRelu() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationSOFTRELU)
+	return *a
+}
+
+//Abs sets a and returns ActivationMode(C.miopenActivationABS) flag
+//
+//Absolute value abs(x)
+func (a *ActivationMode) Abs() ActivationMode { *a = (ActivationMode)(C.miopenActivationABS); return *a }
+
+//Power sets a and returns ActivationMode(C.miopenActivationPOWER) flag
+//
+//Scaled and shifted power (alpha + beta * x)^{gamma}
+func (a *ActivationMode) Power() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationPOWER)
+	return *a
+}
+
+//ClippedRelu sets a and returns ActivationMode(C.miopenActivationCLIPPEDRELU) flag
+//
+//Clipped Rectified Linear Unit: min(alpha, max(0,x))
+func (a *ActivationMode) ClippedRelu() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationCLIPPEDRELU)
+	return *a
+}
+
+//LeakyRelu sets a and returns ActivationMode(C.miopenActivationLEAKYRELU) flag
+//
+//Leaky Rectified Linear Unit: alpha * x | x <= 0; x | x > 0
+func (a *ActivationMode) LeakyRelu() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationLEAKYRELU)
+	return *a
+}
+
+//Elu sets a and returns ActivationMode(C.miopenActivationELU) flag
+//
+//Exponential Rectified Linear Unit: alpha * (e^{x} - 1) | x <= 0; x | x > 0
+func (a *ActivationMode) Elu() ActivationMode {
+	*a = (ActivationMode)(C.miopenActivationELU)
+	return *a
+}
