@@ -4,8 +4,9 @@ package miopen
 #include <miopen/miopen.h>
 
 */
+import "C"
 import (
-	"C"
+	"github.com/dereklstinson/cutil"
 )
 
 //OpTensorOp is used for flags for the Optensor functions
@@ -26,17 +27,17 @@ func (o *OpTensorOp) Min() OpTensorOp { *o = OpTensorOp(C.miopenTensorOpMin); re
 //Max sets o to OpTensorOp(C.miopenTensorOpMax) and returns the new value
 func (o *OpTensorOp) Max() OpTensorOp { *o = OpTensorOp(C.miopenTensorOpMax); return *o }
 
-//OpTensor - This function implements: \f$ C = op ( alpha1[0] * A, alpha2[0] * B ) + beta[0] * C \f$
+//OpTensor - This function implements:  C = op ( alpha1[0] * A, alpha2[0] * B ) + beta[0] * C
 //
 //For Forward Bias one can also use, miopenConvolutionForwardBias()
 func OpTensor(h *Handle,
 	op OpTensorOp,
 	alpha float64,
-	aD *TensorD, a Pointer,
+	aD *TensorD, a cutil.Mem,
 	alpha2 float64,
-	bD *TensorD, b Pointer,
+	bD *TensorD, b cutil.Mem,
 	beta float64,
-	cD *TensorD, c Pointer) error {
+	cD *TensorD, c cutil.Mem) error {
 	dtype, _, _, err := aD.Get()
 	if err != nil {
 		return err
@@ -44,5 +45,5 @@ func OpTensor(h *Handle,
 	a1 := cscalarbydatatype(dtype, alpha)
 	a2 := cscalarbydatatype(dtype, alpha2)
 	b1 := cscalarbydatatype(dtype, beta)
-	return Status(C.miopenOpTensor(h.x, op.c(), a1.CPtr(), aD.descriptor, a.Ptr(), a2.CPtr(), bD.descriptor, b.Ptr(), b1.CPtr(), cD.descriptor, c.Ptr())).error("OpTensor")
+	return Status(C.miopenOpTensor(h.x, op.c(), a1.CPtr(), aD.d, a.Ptr(), a2.CPtr(), bD.d, b.Ptr(), b1.CPtr(), cD.d, c.Ptr())).error("OpTensor")
 }

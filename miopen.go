@@ -14,36 +14,36 @@ type Pointer interface {
 
 //FusionOpD - Fusion Operator Descriptor contains the meta-data associated with an operator
 type FusionOpD struct {
-	descriptor C.miopenFusionOpDescriptor_t
+	d C.miopenFusionOpDescriptor_t
 }
 
 //ConvolutionD - Convolution descriptor is an object that allows the user to specify a layer's padding, stride,
 //and dilation of the convolutional filter. Parameters must all be non-negative.
 type ConvolutionD struct {
-	dims       C.int
-	descriptor C.miopenConvolutionDescriptor_t
+	dims C.int
+	d    C.miopenConvolutionDescriptor_t
 }
 
 //PoolingD - Pooling descriptor is an object that allows the user to specify the dimension sizes of the
 //pooling windows, paddings, strides, and pooling mode.
 type PoolingD struct {
-	descriptor C.miopenPoolingDescriptor_t
+	d C.miopenPoolingDescriptor_t
 }
 
 //LRND - LRN descriptor is an object that allows the user to specify the LRN mode, the number of elements
 //in the normalization window, and the LRN k-parameter.
 type LRND struct {
-	descriptor C.miopenLRNDescriptor_t
+	d C.miopenLRNDescriptor_t
 }
 
 //ActivationD - Activation descriptor is an object that allows the user to specify the activation mode.
 type ActivationD struct {
-	descriptor C.miopenActivationDescriptor_t
+	d C.miopenActivationDescriptor_t
 }
 
 //RNND - Recurrent Neural Network descriptor
 type RNND struct {
-	descriptor C.miopenRNNDescriptor_t
+	d C.miopenRNNDescriptor_t
 }
 
 //DataType is used for flags for the tensor layer structs
@@ -113,6 +113,8 @@ func (i *IndexType) Uint64() IndexType { *i = IndexType(C.miopenIndexUint64); re
 type ConvolutionMode C.miopenConvolutionMode_t
 
 func (c ConvolutionMode) c() C.miopenConvolutionMode_t { return C.miopenConvolutionMode_t(c) }
+
+func (c *ConvolutionMode) cptr() *C.miopenConvolutionMode_t { return (*C.miopenConvolutionMode_t)(c) }
 
 //Convolution sets and returns value of c to ConvolutionMode(C.miopenConvolution)
 //
