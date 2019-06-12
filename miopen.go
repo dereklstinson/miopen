@@ -24,11 +24,6 @@ type ConvolutionD struct {
 	d    C.miopenConvolutionDescriptor_t
 }
 
-//PoolingD - Pooling descriptor is an object that allows the user to specify the dimension sizes of the
-//pooling windows, paddings, strides, and pooling mode.
-type PoolingD struct {
-	d C.miopenPoolingDescriptor_t
-}
 
 //LRND - LRN descriptor is an object that allows the user to specify the LRN mode, the number of elements
 //in the normalization window, and the LRN k-parameter.
