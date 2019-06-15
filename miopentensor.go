@@ -22,22 +22,14 @@ type TensorD struct {
 
 //CreateTensorDescriptor creates an empty tensor descriptor
 func CreateTensorDescriptor() (*TensorD, error) {
-	if setfinalizer {
-
-		return createtensordescriptor(true)
-	}
-	return createtensordescriptor(false)
+	return createtensordescriptor()
 
 }
 func destroytensordescriptor(t *TensorD) error {
-	err := Status(C.miopenDestroyTensorDescriptor(t.d)).error("destroytensordescriptor")
-	if err != nil {
-		return err
-	}
-	t = nil
-	return nil
+	return Status(C.miopenDestroyTensorDescriptor(t.d)).error("destroytensordescriptor")
+
 }
-func createtensordescriptor(gogc bool) (*TensorD, error) {
+func createtensordescriptor() (*TensorD, error) {
 	d := new(TensorD)
 
 	err := Status(C.miopenCreateTensorDescriptor(&d.d)).error("CreateTensorDescriptor-create")
@@ -45,10 +37,7 @@ func createtensordescriptor(gogc bool) (*TensorD, error) {
 		return nil, err
 	}
 
-	if setfinalizer || gogc {
-		d.gogc = true
-		runtime.SetFinalizer(d, destroytensordescriptor)
-	}
+	runtime.SetFinalizer(d, destroytensordescriptor)
 
 	return d, nil
 }

@@ -11,6 +11,13 @@ import (
 	"github.com/dereklstinson/cutil"
 )
 
+//ConvolutionD - Convolution descriptor is an object that allows the user to specify a layer's padding, stride,
+//and dilation of the convolutional filter. Parameters must all be non-negative.
+type ConvolutionD struct {
+	dims C.int
+	d    C.miopenConvolutionDescriptor_t
+}
+
 //CreateConvolutionDescriptor -  Creates a convolution layer descriptor
 func CreateConvolutionDescriptor() (*ConvolutionD, error) {
 	x := new(ConvolutionD)
@@ -19,19 +26,15 @@ func CreateConvolutionDescriptor() (*ConvolutionD, error) {
 	if err != nil {
 		return nil, err
 	}
-	if setfinalizer {
-		runtime.SetFinalizer(x, miopenDestroyConvolutionDescriptor)
-	}
+
+	runtime.SetFinalizer(x, miopenDestroyConvolutionDescriptor)
+
 	return x, nil
 }
 
 func miopenDestroyConvolutionDescriptor(c *ConvolutionD) error {
-	err := Status(C.miopenDestroyConvolutionDescriptor(c.d)).error("miopenDestroyConvolutionDescriptor")
-	if err != nil {
-		return err
-	}
-	c = nil
-	return nil
+	return Status(C.miopenDestroyConvolutionDescriptor(c.d)).error("miopenDestroyConvolutionDescriptor")
+
 }
 
 //Set sets the N-dimensional convolution layer descriptor
@@ -111,15 +114,6 @@ func (c *ConvolutionD) ForwardOutputDim(xD, wD *TensorD) (outputdims []int32, er
 	err = Status(C.miopenGetConvolutionNdForwardOutputDim(c.d, xD.d, wD.d, &dims, &odims[0])).error("SetTransposeOutputPadding")
 	outputdims = cintToint32(odims[:dims])
 	return outputdims, err
-}
-
-//Destroy destroys convolution descriptor if GC is not set. GC is auto set for now. So the only thing Destroy does is return nil
-func (c *ConvolutionD) Destroy() error {
-	if setfinalizer {
-		return nil
-	}
-
-	return miopenDestroyConvolutionDescriptor(c)
 }
 
 //ConvFwdAlgorithm - Used as flags.
@@ -403,3 +397,47 @@ func (c *ConvolutionD) BackwardBias(
 		b1.CPtr(),
 		dbD.d, db.Ptr())).error("(c *ConvolutionD)BackwardBias()")
 }
+
+//ConvolutionMode is the type to describe the convolution mode flags
+type ConvolutionMode C.miopenConvolutionMode_t
+
+func (c ConvolutionMode) c() C.miopenConvolutionMode_t { return C.miopenConvolutionMode_t(c) }
+
+func (c *ConvolutionMode) cptr() *C.miopenConvolutionMode_t { return (*C.miopenConvolutionMode_t)(c) }
+
+//Convolution sets and returns value of c to ConvolutionMode(C.miopenConvolution)
+//
+//Cross-Correlation convolution
+func (c *ConvolutionMode) Convolution() ConvolutionMode {
+	*c = ConvolutionMode(C.miopenConvolution)
+	return *c
+}
+
+// Transpose sets and returns value of c to  ConvolutionMode(C.miopenTranspose)
+//
+//Transpose convolutions -- deconvolution
+func (c *ConvolutionMode) Transpose() ConvolutionMode {
+	*c = ConvolutionMode(C.miopenTranspose)
+	return *c
+}
+
+//PaddingMode is used for flags for the PaddingMode. Flags are set through its methods
+type PaddingMode C.miopenPaddingMode_t
+
+func (p PaddingMode) c() C.miopenPaddingMode_t      { return (C.miopenPaddingMode_t)(p) }
+func (p *PaddingMode) cptr() *C.miopenPaddingMode_t { return (*C.miopenPaddingMode_t)(p) }
+
+//Default sets p and returns PaddingMode(C.miopenPaddingDefault) flag
+//
+//MIOPEN Default Padding
+func (p *PaddingMode) Default() PaddingMode { *p = (PaddingMode)(C.miopenPaddingDefault); return *p }
+
+//Same sets p and returns PaddingMode(C.miopenPaddingSame) flag
+//
+// Tensorflow SAME Padding
+func (p *PaddingMode) Same() PaddingMode { *p = (PaddingMode)(C.miopenPaddingSame); return *p }
+
+//Valid sets p and returns PaddingMode(C.miopenPaddingValid) flag
+//
+//MIOPEN VALID Padding
+func (p *PaddingMode) Valid() PaddingMode { *p = (PaddingMode)(C.miopenPaddingValid); return *p }

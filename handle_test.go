@@ -8,7 +8,7 @@ import (
 )
 
 func TestHandle(t *testing.T) {
-	handle := miopen.CreateHandle(true)
+	handle := miopen.CreateHandle()
 	fmt.Println(handle)
 
 }
