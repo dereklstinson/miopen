@@ -122,7 +122,8 @@ func (c *ConvolutionD) ForwardOutputDim(xD, wD *TensorD) (outputdims []int32, er
 //
 type ConvFwdAlgorithm C.miopenConvFwdAlgorithm_t
 
-func (c ConvFwdAlgorithm) c() C.miopenConvFwdAlgorithm_t { return (C.miopenConvFwdAlgorithm_t)(c) }
+func (c ConvFwdAlgorithm) c() C.miopenConvFwdAlgorithm_t      { return (C.miopenConvFwdAlgorithm_t)(c) }
+func (c *ConvFwdAlgorithm) cptr() *C.miopenConvFwdAlgorithm_t { return (*C.miopenConvFwdAlgorithm_t)(c) }
 
 //GEMM sets c and returns GEMM flag
 func (c *ConvFwdAlgorithm) GEMM() ConvFwdAlgorithm {

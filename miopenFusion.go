@@ -43,7 +43,21 @@ func (f *FusionPlanD) GetWorkSpaceSize(h *Handle, algo ConvFwdAlgorithm) (wspace
 	wspaceSIB = (uint)(ws)
 	return wspaceSIB, err
 }
-
+func (f *FusionPlanD) ConvolutionGetAlgo() (algos []ConvFwdAlgorithm, err error) {
+	var actual C.int
+	request := C.int(4)
+	algos = make([]ConvFwdAlgorithm, request)
+	err = Status(C.miopenFusionPlanConvolutionGetAlgo(f.d, request, &actual, algos[0].cptr())).error("(f *FusionPlanD)ConvolutionGetAlgo()")
+	return algos[:actual], err
+}
+func (f *FusionPlanD) ConvolutionSetAlgo(algo ConvFwdAlgorithm) error {
+	return Status(C.miopenFusionPlanConvolutionSetAlgo(f.d, algo.c())).error("(f *FusionPlanD)ConvolutionSetAlgo()")
+}
+func (f *FusionPlanD)CreateOpConvForward(convD *ConvolutionD, wD *TensorD)(fop *FusionOpD,err error){
+	fop=new(FusionOpD)
+err=	Status(C.miopenCreateOpConvForward(f.d,&fop.d,convD.d,wD.d)).error("(f *FusionPlanD)CreateOpConvForward()")
+return fop,err
+}
 //FusionDirection is used as flags
 //
 //Kernel fusion direction in the network
