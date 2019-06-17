@@ -40,12 +40,18 @@ func (b *BatchNormD) Get() (mode BatchNormMode, err error) {
 	return BatchNormMode(b.mode), nil
 }
 
-//DeriveBNTensorDescriptor Derives a BN Tensor Descriptor from the one passed.
-/*
-* Derives a tensor descriptor from layer data descriptor for BatchNormalization
-* scale, invVariance, bnBias, bnScale tensors. Use this tensor desc for
-* bnScaleBiasMeanVarDesc and bnScaleBiasDiffDesc in Batch Normalization forward and backward functions.
- */
+//DeriveBNTensorDescriptor - Derive tensor for gamma and beta (scale and bias) from input tensor descriptor
+//
+//This function takes the input tensor descriptor and outputs a derived tensor for the
+//normalization scale (gamma) and shift (beta) tensors.
+//
+//For an input tensor NCHW and spatial mode, the output derived tensor is 1C11, while for
+//per-activation the derived tensor is 1CHW.
+//
+//For an input tensor NCDHW and spatial mode, the output derived tensor is 1C111, while for
+//per-activation the derived tensor is 1CDHW.
+//
+//	xDesc		Input tensor descriptor (input)
 func (b *BatchNormD) DeriveBNTensorDescriptor(xDesc *TensorD) (bndesc *TensorD, err error) {
 	if !b.set {
 		return nil, errors.New("BatchNormD not set")
@@ -69,6 +75,86 @@ func miopenDeriveBNTensorDescriptor(xDesc *TensorD, mode BatchNormMode, gogc boo
 	return descriptor, err
 }
 
+//ForwardInference -  Execute forward inference layer for batch normalization
+//
+//Batch normalization pass for forward inference pass.
+//Takes in batch normalization mode bn_mode and input tensor x, output tensor y, bnBias and bnScale
+//with their descriptor.
+//
+//If either estimatedMean, or estimatedVariance are null pointers then the values for the mean and
+//variance will not be used.
+//
+//handle				MIOpen handle (input)
+//alpha				Floating point scaling factor, allocated on the host (input)
+//beta				Floating point shift factor, allocated on the host (input)
+//sD				Tensor descriptor for data input tensor x (input)
+//x				Data tensor x (input)
+//yD				Tensor descriptor for output data tensor y (input)
+//y				Data tensor y (output)
+//scalbiasmeanvarD				Tensor descriptor for BN scaling, shifting, saved variance and mean (input)
+//scale				Batch norm scaling, gamma, tensor (input)
+//bias				Batch norm bias, beta, tensor (input)
+//mean				Running average saved during forward training (input)
+//variance				Running variance saved during forward training (input)
+//epsilon				Value to stabilize inverse variance calculation (input)
+func (b *BatchNormD) ForwardInference(h *Handle, alpha, beta float64,
+	xD *TensorD, x cutil.Mem,
+	yD *TensorD, y cutil.Mem,
+	scalbiasmeanvarD *TensorD,
+	scale, bias cutil.Mem, //returned values
+	mean, variance cutil.Mem, //returned values
+	epsilon float64,
+) error {
+	dtype, _, _, err := xD.Get()
+	if err != nil {
+		return err
+	}
+	a1 := cscalarbydatatype(dtype, alpha)
+	b1 := cscalarbydatatype(dtype, beta)
+	return Status(C.miopenBatchNormalizationForwardInference(h.x, b.mode, a1.CPtr(), b1.CPtr(),
+		xD.d, x.Ptr(),
+		yD.d, y.Ptr(),
+		scalbiasmeanvarD.d,
+		scale.Ptr(), bias.Ptr(),
+		mean.Ptr(), variance.Ptr(),
+		(C.double)(epsilon))).error("(b *BatchNormD)ForwardTraining")
+
+}
+
+//ForwardTraining - Execute forward training layer for batch normalization
+//
+//Batch normalization pass for forward training pass.
+//Takes in batch normalization mode bn_mode and input tensor x, output tensor y, bnBias and bnScale
+//with their descriptor.
+//
+//If either resultSaveMean, or resultSaveInvVariance are null pointers then the values for the mean
+//and inverse variance will not be used.
+//
+//Likewise, if either resultRunningMean, or resultRunningVariance are null pointers then the values
+//for the running mean and variance will not be saved.
+//
+//Running averages and variances are scaled using an exponential averaging factor:
+//
+//	M.old =M.new*factor + M.old*(1-factor)
+//	where factor=1/(1+iteration)
+//
+//Params:
+//	h			MIOpen handle (input)
+//	alpha			Floating point scaling factor, allocated on the host (input)
+//	beta			Floating point shift factor, allocated on the host (input)
+//	xD			Tensor descriptor for data input tensor x (input)
+//	x			Data tensor x (input)
+//	yD			Tensor descriptor for output data tensor y (input)
+//	y			Data tensor y (output)
+//	scalbiasmeanvarD	Tensor descriptor for BN scaling, shifting, saved variance and mean (input)
+//	scale			Batch norm scaling, gamma, tensor (input)
+//	bias			Batch norm bias, beta, tensor (input)
+//	avgfactor		Exponential averaging factor (input)
+//	mean			Running average saved for inference (output)
+//	variance		Running variance saved for inference (output)
+//	epsilon			Value to stablize inverse variance calculation (input)
+//	saveMean		Saved mini-batch mean for backwards pass (output)
+//	saveInvariance		Saved mini-batch inverse variance for backwards pass (output)
 func (b *BatchNormD) ForwardTraining(h *Handle, alpha, beta float64,
 	xD *TensorD, x cutil.Mem,
 	yD *TensorD, y cutil.Mem,
@@ -97,6 +183,36 @@ func (b *BatchNormD) ForwardTraining(h *Handle, alpha, beta float64,
 
 }
 
+//Backward - Execute backwards propagation layer for batch normalization
+//
+//Batch normalization pass for backwards propagation training pass.
+//The method for backwards propagation batch normalization.
+//
+//Takes in batch normalization mode bn_mode and input tensor data x, input activation tensor dy,
+//output tensor dx, the learned tensors resultBNBiasDiff and resultBNScaleDiff with their
+//descriptor.
+//
+//If BOTH savedMean, and savedVariance are not null pointers then the method will use the saved
+//mean and variance calculated by the forward training phase.
+//
+//	h				MIOpen handle (input)
+//	alphaDataDiff			Floating point scaling factor, allocated on the host (input)
+//	betaDataDiff			Floating point shift factor, allocated on the host (input)
+//	alphaParamDiff			Floating point scaling factor, allocated on the host (input)
+//	betaParamDiff			Floating point shift factor, allocated on the host (input)
+//	xD				Tensor descriptor for data input tensor x (input)
+//	x				Data tensor x (input)
+//	dyD				Tensor descriptor for output data tensor y (input)
+//	dy				Data tensor y (input)
+//	dxD				Tensor descriptor for output data tensor dx (input)
+//	dx				Data delta tensor dx (output)
+//	scalebiasdiffD 			Tensor descriptor for BN scaling, shifting, saved variance and mean (input)
+//	bnScale				Batch norm scaling, gamma, tensor (input)
+//	scalediff			Tensor for dscale (output)
+//	biasdiff			Tensor for dbias (output)
+//	epsilon				Value to stabilize inverse variance calculation (input)
+//	savedMean			Saved mini-batch mean for backwards pass (input)
+//	savedInvVariance		Saved mini-bathc inverse variance for backwards pass (input)
 func (b *BatchNormD) Backward(h *Handle, alphaDataDiff, betaDataDiff, alphaParamDiff, betaParamDiff float64,
 	xD *TensorD, x cutil.Mem,
 	dyD *TensorD, dy cutil.Mem,

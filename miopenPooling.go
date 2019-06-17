@@ -16,6 +16,7 @@ type PoolingD struct {
 	dims C.int
 }
 
+//CreatePoolingDescriptor - Creates a pooling layer descriptor
 func CreatePoolingDescriptor() (p *PoolingD, err error) {
 	p = new(PoolingD)
 	err = Status(C.miopenCreatePoolingDescriptor(&p.d)).error("CreatePoolingDescriptor")
@@ -29,15 +30,31 @@ func miopenDestroyPoolingDescriptor(p *PoolingD) error {
 
 }
 
-func (p *PoolingD) SetIndex(index IndexType) error {
+//SetIndexType - Set index data type for pooling layer. The default indexing type is uint8_t.
+//
+//Users can set the index type to any of the miopenIndexType_t sizes; 8, 16, 32, or 64 bit
+//unsigned integers.
+//
+//	index   Index type (input)
+func (p *PoolingD) SetIndexType(index IndexType) error {
 	return Status(C.miopenSetPoolingIndexType(p.d, index.c())).error("SetIndex")
 }
-func (p *PoolingD) GetIndex() (index IndexType, err error) {
+
+//GetIndexType - Get the index data type for pooling layer. The index type to any of the
+//IndexType sizes; 8, 16, 32, or 64 bit unsigned integers.
+func (p *PoolingD) GetIndexType() (index IndexType, err error) {
 	err = Status(C.miopenGetPoolingIndexType(p.d, index.cptr())).error("GetIndex")
 	return index, err
 }
 
-//Set 2d pooling descriptor is only supported
+//Set - Sets a pooling layer descriptor details. (2D only right now)
+//
+//Sets the window shape, padding, and stride for a previously created 2-D pooling descriptor.
+//
+//	mode		Pooling mode enum (input)
+//	window	Input window dimension (input)
+//	pad          Number of elements to pad (input)
+//	stride       Number of elements to stride over (input)
 func (p *PoolingD) Set(mode PoolingMode, window, pad, stride []int32) error {
 	if len(window) != 2 || len(pad) != 2 || len(stride) != 2 {
 		return errors.New("(*Pooling)Set() : len(window)!=2 || len(pad) !=2 ||len(stride)!=2")
@@ -49,6 +66,9 @@ func (p *PoolingD) Set(mode PoolingMode, window, pad, stride []int32) error {
 	return Status(C.miopenSet2dPoolingDescriptor(p.d, mode.c(), w[0], w[1], padding[0], padding[1], s[0], s[1])).error("(p *Pooling)Set()")
 }
 
+//Get - Gets layer descriptor details. (2D only right now)
+//
+//Gets the window shape, padding, and stride for a previously created pooling descriptor.
 func (p *PoolingD) Get() (mode PoolingMode, window, pad, stride []int32, err error) {
 	cw := make([]C.int, p.dims)
 	cp := make([]C.int, p.dims)
@@ -59,12 +79,29 @@ func (p *PoolingD) Get() (mode PoolingMode, window, pad, stride []int32, err err
 	stride = cintToint32(cs)
 	return mode, window, pad, stride, err
 }
+
+//GetForwardOutputDim - Gets the shape of the output tensor
+//
+//Retrieve the tensor dimensions for the forward 2-D pooling. This call is required for
+//the forward if the output dimensions are different than the input tensor
+//dimensions.
+//
+//	tD		Input tensor descriptor (input)
 func (p *PoolingD) GetForwardOutputDim(tD *TensorD) (dims []int32, err error) {
 	cdims := make([]C.int, 4)
 	err = Status(C.miopenGetPoolingForwardOutputDim(p.d, tD.d, &cdims[0], &cdims[1], &cdims[2], &cdims[3])).error("(p *Pooling)GetForwardOutputDim()")
 	dims = cintToint32(cdims)
 	return dims, err
 }
+
+//GetWSpaceSize - Get the amount of GPU memory required for pooling
+//
+//Retrieves the amount of workspace in bytes require for pooling. This call is required to
+//determine the amount of GPU memory needed for the backwards pooling algorithms. For max-
+//pooling, there is no assumption on index data type. As the user can set the index datatype
+//size using miopenSetPoolingIndexType().
+//
+//yD		Descriptor for pooling layer (input)
 func (p *PoolingD) GetWSpaceSize(yD *TensorD) (wspaceSIB uint, err error) {
 	var ws C.size_t
 	err = Status(C.miopenPoolingGetWorkSpaceSizeV2(p.d, yD.d, &ws)).error("(*PoolingD) GetForwardOutputDim")
@@ -72,6 +109,23 @@ func (p *PoolingD) GetWSpaceSize(yD *TensorD) (wspaceSIB uint, err error) {
 	return wspaceSIB, err
 }
 
+//Forward - Execute a forward pooling layer
+//
+//Runs forward pooling. miopenGetPoolingForwardOutputDim() should be called before
+//miopenPoolingForward().
+//If the parameter do_backward == 0, then set workSpace = nullptr and workSpaceSize = 0. However,
+//for back-propagation do_backwards must be set to 1 in miopenPoolingForward().
+//
+//h         MIOpen handle (input)
+//alpha          Floating point scaling factor, allocated on the host (input)
+//xD          Tensor descriptor for data input tensor x (input)
+//x              Data tensor x (input)
+//beta           Floating point shift factor, allocated on the host (input)
+//yD          Tensor descriptor for output data tensor y (input)
+//y              Data tensor y (output)
+//do_backward    Boolean to toggle save data in workspace for backwards pass (input)
+//wspace      Pointer user allocated memory (input)
+//wspaceSIB  Size in bytes of the memory needed (input)
 func (p *PoolingD) Forward(h *Handle, alpha float64,
 	xD *TensorD, x cutil.Mem,
 	beta float64,
@@ -89,6 +143,24 @@ func (p *PoolingD) Forward(h *Handle, alpha float64,
 		yD.d, y.Ptr(),
 		(C.bool)(dobackwards), wspace.Ptr(), (C.size_t)(wspaceSIB))).error("(*Pooling)Forward()")
 }
+
+//Backward - Execute a backward pooling layer
+//
+//Runs backward pooling. (p *PoolingD) GetWSpaceSize() must be called before
+//(p *PoolingD) Backward() to determine the amount of workSpace to be allocated.
+//
+//h         MIOpen handle (input)
+//alpha          Floating point scaling factor, allocated on the host (input)
+//yD          Tensor descriptor for output data tensor y (input)
+//y              Data tensor y (input)
+//dyD         Tensor descriptor for data input tensor dy (input)
+//dy             Data delta tensor dy (input)
+//xD          Tensor descriptor for output data tensor x (input)
+//x              Data tensor x (output)
+//beta           Floating point shift factor, allocated on the host (input)
+//dxD         Tensor descriptor for tensor dx (input)
+//dx             Weights delta tensor dx (output)
+//wspace      Pointer to user allocated workspace (input)
 func (p *PoolingD) Backward(h *Handle, alpha float64,
 	yD *TensorD, y cutil.Mem,
 	dyD *TensorD, dy cutil.Mem,
