@@ -1,7 +1,32 @@
 package miopen
 
+//#include <miopen/miopen.h>
 import "C"
-import "github.com/dereklstinson/cutil"
+import (
+	"unsafe"
+
+	"github.com/dereklstinson/cutil"
+)
+
+type mem struct {
+	x unsafe.Pointer
+}
+
+func (m *mem) Ptr() unsafe.Pointer {
+	return m.x
+}
+func (m *mem) DPtr() *unsafe.Pointer {
+	return &m.x
+}
+
+func tensorDarraytomiopenTensorDescriptorArray(td []*TensorD) (ctd []C.miopenTensorDescriptor_t, seqlen C.int) {
+	seqlen = (C.int)(len(td))
+	ctd = make([]C.miopenTensorDescriptor_t, len(td))
+	for i := range td {
+		ctd[i] = td[i].d
+	}
+	return ctd, seqlen
+}
 
 func int32Tocint(x []int32) []C.int {
 	y := make([]C.int, len(x))

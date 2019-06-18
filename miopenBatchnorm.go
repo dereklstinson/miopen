@@ -7,6 +7,7 @@ package miopen
 import "C"
 import (
 	"errors"
+	"unsafe"
 
 	"github.com/dereklstinson/cutil"
 )
@@ -81,22 +82,22 @@ func miopenDeriveBNTensorDescriptor(xDesc *TensorD, mode BatchNormMode, gogc boo
 //Takes in batch normalization mode bn_mode and input tensor x, output tensor y, bnBias and bnScale
 //with their descriptor.
 //
-//If either estimatedMean, or estimatedVariance are null pointers then the values for the mean and
+//If either mean, variance are nil pointers then the values for the mean and
 //variance will not be used.
 //
-//handle				MIOpen handle (input)
-//alpha				Floating point scaling factor, allocated on the host (input)
-//beta				Floating point shift factor, allocated on the host (input)
-//sD				Tensor descriptor for data input tensor x (input)
-//x				Data tensor x (input)
-//yD				Tensor descriptor for output data tensor y (input)
-//y				Data tensor y (output)
-//scalbiasmeanvarD				Tensor descriptor for BN scaling, shifting, saved variance and mean (input)
-//scale				Batch norm scaling, gamma, tensor (input)
-//bias				Batch norm bias, beta, tensor (input)
-//mean				Running average saved during forward training (input)
-//variance				Running variance saved during forward training (input)
-//epsilon				Value to stabilize inverse variance calculation (input)
+//	handle				MIOpen handle (input)
+//	alpha				Floating point scaling factor, allocated on the host (input)
+//	beta				Floating point shift factor, allocated on the host (input)
+//	sD				Tensor descriptor for data input tensor x (input)
+//	x				Data tensor x (input)
+//	yD				Tensor descriptor for output data tensor y (input)
+//	y				Data tensor y (output)
+//	scalbiasmeanvarD				Tensor descriptor for BN scaling, shifting, saved variance and mean (input)
+//	scale				Batch norm scaling, gamma, tensor (input)
+//	bias				Batch norm bias, beta, tensor (input)
+//	mean				Running average saved during forward training (input)
+//	variance				Running variance saved during forward training (input)
+//	epsilon				Value to stabilize inverse variance calculation (input)
 func (b *BatchNormD) ForwardInference(h *Handle, alpha, beta float64,
 	xD *TensorD, x cutil.Mem,
 	yD *TensorD, y cutil.Mem,
@@ -111,6 +112,16 @@ func (b *BatchNormD) ForwardInference(h *Handle, alpha, beta float64,
 	}
 	a1 := cscalarbydatatype(dtype, alpha)
 	b1 := cscalarbydatatype(dtype, beta)
+	if mean == nil || variance == nil {
+		return Status(C.miopenBatchNormalizationForwardInference(h.x, b.mode, a1.CPtr(), b1.CPtr(),
+			xD.d, x.Ptr(),
+			yD.d, y.Ptr(),
+			scalbiasmeanvarD.d,
+			scale.Ptr(), bias.Ptr(),
+			nil, nil,
+			(C.double)(epsilon))).error("(b *BatchNormD)ForwardTraining")
+
+	}
 	return Status(C.miopenBatchNormalizationForwardInference(h.x, b.mode, a1.CPtr(), b1.CPtr(),
 		xD.d, x.Ptr(),
 		yD.d, y.Ptr(),
@@ -127,10 +138,10 @@ func (b *BatchNormD) ForwardInference(h *Handle, alpha, beta float64,
 //Takes in batch normalization mode bn_mode and input tensor x, output tensor y, bnBias and bnScale
 //with their descriptor.
 //
-//If either resultSaveMean, or resultSaveInvVariance are null pointers then the values for the mean
+//If either saveMean, or saveInvariance are nil then the values for the mean
 //and inverse variance will not be used.
 //
-//Likewise, if either resultRunningMean, or resultRunningVariance are null pointers then the values
+//Likewise, if either mean, or variance are nil then the values
 //for the running mean and variance will not be saved.
 //
 //Running averages and variances are scaled using an exponential averaging factor:
@@ -171,15 +182,37 @@ func (b *BatchNormD) ForwardTraining(h *Handle, alpha, beta float64,
 	}
 	a1 := cscalarbydatatype(dtype, alpha)
 	b1 := cscalarbydatatype(dtype, beta)
+	var (
+		meanptr            unsafe.Pointer
+		varptr             unsafe.Pointer
+		savemeanptr        unsafe.Pointer
+		saveinvvarianceptr unsafe.Pointer
+	)
+
+	if mean == nil || variance == nil {
+		meanptr = nil
+		varptr = nil
+	} else {
+		meanptr = mean.Ptr()
+		varptr = variance.Ptr()
+	}
+	if saveMean == nil || saveInvariance == nil {
+		savemeanptr = nil
+		saveinvvarianceptr = nil
+	} else {
+		savemeanptr = saveMean.Ptr()
+		saveinvvarianceptr = saveInvariance.Ptr()
+	}
+
 	return Status(C.miopenBatchNormalizationForwardTraining(h.x, b.mode, a1.CPtr(), b1.CPtr(),
 		xD.d, x.Ptr(),
 		yD.d, y.Ptr(),
 		scalbiasmeanvarD.d,
 		scale.Ptr(), bias.Ptr(),
 		(C.double)(avgfactor),
-		mean.Ptr(), variance.Ptr(),
+		meanptr, varptr,
 		(C.double)(epsilon),
-		saveMean.Ptr(), saveInvariance.Ptr())).error("(b *BatchNormD)ForwardTraining")
+		savemeanptr, saveinvvarianceptr)).error("(b *BatchNormD)ForwardTraining")
 
 }
 
@@ -229,6 +262,10 @@ func (b *BatchNormD) Backward(h *Handle, alphaDataDiff, betaDataDiff, alphaParam
 	b1 := cscalarbydatatype(dtype, betaDataDiff)
 	a2 := cscalarbydatatype(dtype, alphaParamDiff)
 	b2 := cscalarbydatatype(dtype, betaParamDiff)
+	if savedMean == nil || savedInvVariance == nil {
+		Status(C.miopenBatchNormalizationBackward(h.x, b.mode, a1.CPtr(), b1.CPtr(), a2.CPtr(), b2.CPtr(), xD.d, x.Ptr(), dyD.d, dy.Ptr(), dxD.d, dx.Ptr(), scalebiasdiffD.d,
+			scale.Ptr(), scalediff.Ptr(), biasdiff.Ptr(), (C.double)(epsilon), nil, nil)).error("(b *BatchNormD)Backward()")
+	}
 	return Status(C.miopenBatchNormalizationBackward(h.x, b.mode, a1.CPtr(), b1.CPtr(), a2.CPtr(), b2.CPtr(), xD.d, x.Ptr(), dyD.d, dy.Ptr(), dxD.d, dx.Ptr(), scalebiasdiffD.d,
 		scale.Ptr(), scalediff.Ptr(), biasdiff.Ptr(), (C.double)(epsilon), savedMean.Ptr(), savedInvVariance.Ptr())).error("(b *BatchNormD)Backward()")
 }
