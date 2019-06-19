@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dereklstinson/miopen"
+	miopen "github.com/dereklstinson/migo"
 )
 
 func TestHandle(t *testing.T) {
