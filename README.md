@@ -1,10 +1,8 @@
 # miopen
 Go bindings for miopen (Radeon)
 
-
-It has been a train wreck trying to get this to work with gcc.  
-Currently there is a bug with gcc and hip. 
-I had to do some slight modifications to hip and miopen to get this to work with gcc.
+As of right now 10/29/2019. This works without modifications to the source code.  
+This is the hip version of miopen.  
 
 ## Must install rocm,miopen and rocblas.  
 
