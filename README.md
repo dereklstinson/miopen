@@ -24,6 +24,9 @@ go get github.com/dereklstinson/half
 ```
 
 ## Use a hip binding.
+
+To allocate memory, streams, etc ...
+
 ```
 go get github.com/dereklstinson/hip
 
